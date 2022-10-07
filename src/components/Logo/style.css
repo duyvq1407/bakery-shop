@@ -1,0 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Gloria+Hallelujah&display=swap');
+
+.logo-brand{
+    min-height: 65px;
+    font-family: 'Gloria Hallelujah', cursive;
+    color: #fab866;
+}

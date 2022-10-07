@@ -1,0 +1,21 @@
+.ant-card-body{
+    padding: 16px;
+}
+
+.product-card h3,
+.product-card h4{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* width: 200px; */
+    white-space: nowrap;
+}
+
+.product-card{
+    transition: ease-in-out;
+    transition: 500ms;
+}
+
+.product-card:hover{
+    cursor: pointer;
+    transform: translateY(-10px)
+}
