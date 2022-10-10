@@ -1,4 +1,4 @@
-import { Form, Input, InputNumber, Modal, Space, Button, Select, Upload } from 'antd';
+import { Form, Input, InputNumber, Modal, Button, Select, Upload } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import ImgCrop from 'antd-img-crop';
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
@@ -7,6 +7,8 @@ import { useGetAllCategoryQuery } from '../../../../app/api/categoryApiSlice';
 import { useGetAllIngredientQuery } from '../../../../app/api/ingredientApiSlice';
 import { useAddProductMutation, useUpdateProductMutation } from '../../../../app/api/productApiSlice';
 import { useGetAllUnitQuery } from '../../../../app/api/unitApiSlice';
+import { v4 } from 'uuid'
+
 const { Option } = Select;
 
 const dummyRequest = ({ file, onSuccess }) => {
@@ -26,8 +28,9 @@ const ModalFormProduct = (props, ref) => {
   const [error, setError] = useState(null)
   const [mode, setMode] = React.useState(MODE.ADD);
   const [fileList, setFileList] = useState([]);
-  const [imageObjArr, setImageObjArr] = useState([]);
-  const [typeObjArr, setTypeObjArr] = useState([])
+  const [oldImages, setOldImages] = useState([]);
+  const [oldTypeObjArr, setOldTypeObjArr] = useState([])
+  const [arrIngredient, setArrIngredient] = useState([])
 
   const {data: listUnit} = useGetAllUnitQuery();
   const {data: listIngredient} = useGetAllIngredientQuery();
@@ -41,36 +44,46 @@ const ModalFormProduct = (props, ref) => {
         if (caseForm === MODE.ADD) {
             setTitle('Thêm sản phẩm');
             setMode(MODE.ADD);
-        } else {
-            setTitle("Sửa sản phẩm");
-            let fielsData = {
+        } else {            
+            const ingredientObjArr = data.ingredients.split(';').map(item => {
+              return {
+                idIngredient: +item.split("-")[0],
+                amount: item.split("-")[1]
+              }
+            })
+
+            const types = data.idTypes?.split(";").map(item => +item) || []
+
+            const fielsData = {
                 id: data.id,
                 name: data.name,
                 idUnit: data.idUnit,
                 unitPrice: data.unitPrice,
                 description: data.description,
-                types: data.idTypes?.split(";")?.map(item => +item),
-                amount: +data.ingredients?.split(";")[0].split("-")[1],
-                ingredient: +data.ingredients?.split(";")[0].split("-")[0]
+                types,
+                ingredientObjArr
             }
-            let arrTypes = data.idTypes?.split(";").map(item => +item) || []
-            setTypeObjArr(arrTypes)
-            setFileList(data.images.split(";")?.map((item, index) => {
-                return {
-                    uid: index + 1,
-                    name: item,
-                    url: `http://127.0.0.1:3001/public/img/${item}`
-                }
-            }))
+
             productForm.setFieldsValue(fielsData)
+
+            setFileList(data.images.split(";")?.map((item, index) => {
+              return {
+                  uid: v4(),
+                  name: item,
+                  url: `http://127.0.0.1:3001/public/img/${item}`
+              }
+            }))
+            setOldTypeObjArr(types)
+            setTitle("Sửa sản phẩm");
+            setArrIngredient(ingredientObjArr)
             setMode(MODE.EDIT);
         }
     }
   }))
 
   const handleCancel = () => {
-    setTypeObjArr([])
-    setImageObjArr([])
+    setOldTypeObjArr([])
+    setOldImages([])
     setFileList([])
     setVisibale(false);
     setError(null);
@@ -79,7 +92,7 @@ const ModalFormProduct = (props, ref) => {
 
   const onChangeImg = ({fileList: newFileList, file}) => {
     newFileList.forEach(function(item) {
-      if (item.originFileObj) {
+      if (item.originFileObj && !item.base64) {
         let reader = new FileReader();
         reader.onload = (e) => {
             item.base64 =  e.target.result;
@@ -89,80 +102,83 @@ const ModalFormProduct = (props, ref) => {
     });
 
     if (file.status === 'removed' && !file.type) {
-      setImageObjArr([...imageObjArr, {name: file.name, isDeleted: true}])
+      setOldImages(prev => [...prev, {name: file.name, isDeleted: true}])
     }
 
     setFileList(newFileList);
   };
 
   const onFinish = (values) => {
-    let newImgs = [];
-    let oldImgs = [];
-    let arrTypes = [];
-    typeObjArr.forEach(item => {
-      if (!values.types.includes(item)) {
-        arrTypes.push({id: item, isDeleted: 1, isCreated: 0})
+    let fileBase64ObjArr = [];
+    let imageObjArr = oldImages;
+
+    fileList.forEach(item => {
+      if (item.type) {
+        fileBase64ObjArr.push({base64: item.base64})
       } else {
-        arrTypes.push({id: item, isDeleted: 0, isCreated: 0})
+        imageObjArr.push({name: item.name, isDeleted: false})
+      }
+    })
+
+    
+    let typeObjArr = [];
+    
+    oldTypeObjArr.forEach(item => {
+      if (!values.types.includes(item)) {
+        typeObjArr.push({id: item, isDeleted: true, isCreated: false})
+      } else {
+        typeObjArr.push({id: item, isDeleted: false, isCreated: false})
       }
     })
 
     values.types?.forEach(item => {
-      if (!arrTypes.map((item => item.id)).includes(item)) {
-        arrTypes.push({id:item, isDeleted: 0, isCreated: 1})
+      if (!typeObjArr.map((item => item.id)).includes(item)) {
+        typeObjArr.push({id:item, isDeleted: false, isCreated: true})
       }
     })
 
-    fileList.forEach(item => {
-      if (item.type) {
-        newImgs.push({base64: item.base64})
-      } else {
-        oldImgs.push({name: item.name, isDeleted: false})
-      }
-    })
-
-    const ingredientObjArr = [
-      {
-        idIngredient: values.ingredient,
-        amount: values.amount,
+    const ingredientObjArr = values.ingredientObjArr.map(item => {
+      return {
+        idIngredient: item.idIngredient,
+        amount: item.amount,
         isCreated: true,
         isDeleted: false,
         isModified: false,
       }
-    ];    
-    const info = {...values, fileBase64ObjArr: newImgs, ingredientObjArr}
+    }) 
+
+    const info = {...values, fileBase64ObjArr, ingredientObjArr}
     
     switch (mode){
         case MODE.ADD:
-            AddProduct(info)
-                .unwrap()
-                .then(res => {
-                    toast.success("Thêm thành công")
-                    setFileList([])
-                    setVisibale(false)
-                    setError(null)
-                })
-                .catch(error => {
-                    console.log(error)
-                    setError(error)
-                })
+          AddProduct(info)
+              .unwrap()
+              .then(() => {
+                  toast.success("Thêm thành công")
+                  setFileList([])
+                  setVisibale(false)
+                  setError(null)
+              })
+              .catch(error => {
+                  console.log(error)
+                  setError(error)
+              })
             break;
         case MODE.EDIT:
-            console.log({...info, typeObjArr: arrTypes, imageObjArr: [...imageObjArr, ...oldImgs], ingredientObjArr: []});
-            UpdateProduct({...info, typeObjArr: arrTypes, imageObjArr: [...imageObjArr, ...oldImgs], ingredientObjArr: []})
-                .unwrap()
-                .then(res => {
-                    toast.success("Sửa thành công")
-                    setFileList([])
-                    setImageObjArr([])
-                    setVisibale(false)
-                    setTypeObjArr([])
-                    setError(null)
-                })
-                .catch(error => {
-                    setError(error)
-                })
-            break;
+          UpdateProduct({...info, typeObjArr, imageObjArr, ingredientObjArr: []})
+              .unwrap()
+              .then(() => {
+                  toast.success("Sửa thành công")
+                  setFileList([])
+                  setOldImages([])
+                  setVisibale(false)
+                  setOldTypeObjArr([])
+                  setError(null)
+              })
+              .catch(error => {
+                  setError(error)
+              })
+          break;
 
         default:
     }
@@ -189,6 +205,7 @@ const ModalFormProduct = (props, ref) => {
         getContainer={false}
       >
             <Form
+            scrollToFirstError={true}
             form={productForm}
             preserve={false}
             onFinish={onFinish}
@@ -285,7 +302,7 @@ const ModalFormProduct = (props, ref) => {
                   mode="multiple"
                   tokenSeparators={[';']}
                 >
-                  {listCategory && listCategory?.map(item => {
+                  {listCategory && listCategory?.map((item, idx) => {
                     return <Option key={item.id} value={item.id}>{item.name}</Option>
                   })}
                 </Select>
@@ -309,44 +326,73 @@ const ModalFormProduct = (props, ref) => {
             <div className='tw-mx-6 tw-mt-3'>
 
               <h3 className='tw-border-b-2 tw-pb-2 tw-mb-4'>Danh sách nguyên liệu</h3>
-              {/* <div className='tw-flex tw-items-center'>
 
-                <Form.Item
-                  className='tw-w-1/3 tw-mr-12'
-                  name="ingredient"
-                  label="Nguyên liệu"
-                  rules={[
-                    {
-                    required: true,
-                    message: 'Vui lòng chọn thể loại!',
-                    },
-                  ]}
-                  >
-                    <Select
-                      placeholder="Chọn nguyên liệu"
-                    >
-                      {listIngredient && listIngredient?.map(item => {
-                        return <Option key={item.id} value={item.id}>{item.name} - {item.unit}</Option>
-                      })}
-                    </Select>
-                </Form.Item>
+              <div className='tw-flex tw-items-center'>
+                <Form.List name="ingredientObjArr">
+                  {(fields, { add, remove }) => (
+                    <div className='tw-block'>
+                      {fields.map((field, idx) => (
+                        <div className='tw-flex tw-items-center' key={field.key} align="baseline">
+                          <Form.Item
+                            noStyle
+                            shouldUpdate={(prevValues, curValues) => prevValues.ingredientObjArr !== curValues.ingredientObjArr
+                            }
+                          >
+                            {() => (
+                              <Form.Item
+                                {...field}
+                                className='tw-mr-6'
+                                label="Nguyên liệu"
+                                name={[field.name, 'idIngredient']}
+                                rules={[
+                                  {
+                                    required: true,
+                                    message: 'Vui lòng chọn nguyên liệu.',
+                                  },
+                                ]}
+                                >
+                                <Select className='tw-w-[350px]' placeholder="Chọn nguyên liệu">
+                                  {listIngredient?.map((item)=> {
+                                    return (
+                                      <Option key={v4()} value={item.id}>
+                                        {item.name}
+                                      </Option>
+                                    )
+                                  })}
+                                </Select>
+                              </Form.Item>
+                            )}
+                          </Form.Item>
+                          
+                          <Form.Item
+                            {...field}
+                            className='tw-mr-6'
+                            label="Số lượng"
+                            name={[field.name, 'amount']}
+                            rules={[
+                              {
+                                required: true,
+                                message: 'Vui lòng nhập số lượng.',
+                              },
+                            ]}
+                          >
+                            <InputNumber placeholder="Nhập số lượng nguyên liệu" className='tw-w-[200px]' min={1}/>
+                          </Form.Item> 
 
-                <Form.Item
-                  className='tw-w-1/3'
-                  name="amount"
-                  rules={[
-                    {
-                    required: true,
-                    message: 'Vui lòng nhập số lượng nguyên liệu!',
-                    },
-                  ]}
+                          <MinusCircleOutlined onClick={() => remove(field.name)} />
+                        </div>
+                      ))}
 
-                  label="Số lượng"
-                >
-                  <InputNumber className='tw-w-full' />
-                </Form.Item>
+                      <Form.Item>
+                        <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                          Thêm nguyên liệu
+                        </Button>
+                      </Form.Item>
+                    </div>
+                  )}
+                </Form.List>
 
-              </div> */}
+              </div>
             </div>            
 
           </Form>
@@ -354,7 +400,7 @@ const ModalFormProduct = (props, ref) => {
             <div>
                 {error && (
                     <div className='tw-text-red-500'>
-                    {error?.msg || error?.data?.msg}
+                      {error?.msg || error?.data?.msg}
                     </div>
                 )}  
             </div>

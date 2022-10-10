@@ -1,21 +1,20 @@
 import React from 'react'
-import { DeleteOutlined, EditOutlined, EllipsisOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { Card, Tooltip } from 'antd';
 import './style.css'
 import { toast } from 'react-toastify';
 import { useRemoveProductMutation } from '../../../../app/api/productApiSlice';
-import { useNavigate } from 'react-router-dom';
 import ModalFormProduct from './ModalFormProduct';
 
 const ProductCart = ({data}) => {
     
-    const [removeProduct, {isLoading: productLoading}] = useRemoveProductMutation()
+    const [removeProduct] = useRemoveProductMutation()
 
     const handleRemove = (id) => {
         const confirm = window.confirm("Bạn có chắc chắn muốn xóa?")
         if (confirm) {
             removeProduct(id)
-            toast.success("Xoa thanh cong")
+            toast.success("Xóa thành công.")
         }
     }    
 
