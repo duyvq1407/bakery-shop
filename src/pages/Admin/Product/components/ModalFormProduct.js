@@ -354,7 +354,7 @@ const ModalFormProduct = (props, ref) => {
                                 <Select className='tw-w-[350px]' placeholder="Chọn nguyên liệu">
                                   {listIngredient?.map((item)=> {
                                     return (
-                                      <Option key={v4()} value={item.id}>
+                                      <Option key={item.id} value={item.id}>
                                         {item.name}
                                       </Option>
                                     )
